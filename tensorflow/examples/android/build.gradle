@@ -28,8 +28,8 @@ buildscript {
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 24
-    buildToolsVersion "24.0.1"
+    compileSdkVersion 23
+    buildToolsVersion "23.0.3"
 
     lintOptions {
         abortOnError false
@@ -67,6 +67,6 @@ task copyNativeLibs(type: Copy) {
     duplicatesStrategy = 'include'
 }
 
-copyNativeLibs.dependsOn buildNative
+//copyNativeLibs.dependsOn buildNative
 assemble.dependsOn copyNativeLibs
 assembleDebug.dependsOn copyNativeLibs

@@ -19,7 +19,10 @@ import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
 import android.graphics.Canvas;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Matrix;
+import android.graphics.Paint;
 import android.media.Image;
 import android.media.Image.Plane;
 import android.media.ImageReader;
@@ -29,6 +32,7 @@ import android.os.Trace;
 
 import java.io.IOException;
 import java.util.List;
+
 import junit.framework.Assert;
 import org.tensorflow.demo.env.ImageUtils;
 import org.tensorflow.demo.env.Logger;
@@ -39,7 +43,7 @@ import org.tensorflow.demo.env.Logger;
 public class TensorFlowImageListener implements OnImageAvailableListener {
   private static final Logger LOGGER = new Logger();
 
-  private static final boolean SAVE_PREVIEW_BITMAP = false;
+  private static final boolean SAVE_PREVIEW_BITMAP = true;
 
   // These are the settings for the original v1 Inception model. If you want to
   // use a model that's been produced from the TensorFlow for Poets codelab,
@@ -53,6 +57,10 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
   private static final float IMAGE_STD = 1;
   private static final String INPUT_NAME = "input:0";
   private static final String OUTPUT_NAME = "output:0";
+
+//  private static final String MODEL_FILE = "file:///android_asset/classify_image_graph_def.pb";
+//  private static final String LABEL_FILE =
+//      "file:///android_asset/imagenet_synset_to_human_label_map.txt";
 
   private static final String MODEL_FILE = "file:///android_asset/tensorflow_inception_graph.pb";
   private static final String LABEL_FILE =
@@ -70,9 +78,15 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
   private Bitmap croppedBitmap = null;
 
   private boolean computing = false;
+
   private Handler handler;
 
   private RecognitionScoreView scoreView;
+  private byte[] previousImage;
+
+  private ImagePHash imagePHash;
+
+  private String previousPHash;
 
   public void initialize(
       final AssetManager assetManager,
@@ -90,6 +104,8 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
     this.scoreView = scoreView;
     this.handler = handler;
     this.sensorOrientation = sensorOrientation;
+    this.imagePHash = new ImagePHash();
+    this.previousPHash = "0010101110101000101011110011010111101011111010001";
   }
 
   private void drawResizedBitmap(final Bitmap src, final Bitmap dst) {
@@ -120,6 +136,7 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
   @Override
   public void onImageAvailable(final ImageReader reader) {
     Image image = null;
+    long startTime;
     try {
       image = reader.acquireLatestImage();
 
@@ -136,7 +153,9 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
 
       Trace.beginSection("imageAvailable");
 
+      startTime = System.currentTimeMillis();
       final Plane[] planes = image.getPlanes();
+
 
       // Initialize the storage bitmaps once when the resolution is known.
       if (previewWidth != image.getWidth() || previewHeight != image.getHeight()) {
@@ -184,28 +203,61 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
     }
 
     rgbFrameBitmap.setPixels(rgbBytes, 0, previewWidth, 0, 0, previewWidth, previewHeight);
+
+    String currentPHash = imagePHash.culcPHash(rgbFrameBitmap);
+    int distance = imagePHash.distance(previousPHash, currentPHash);
+    if (distance < 20) {
+      computing = false;
+      return;
+    }
+    LOGGER.i("Distance more than 15 it is " + distance);
+
     drawResizedBitmap(rgbFrameBitmap, croppedBitmap);
 
-    // For examining the actual TF input.
     if (SAVE_PREVIEW_BITMAP) {
       ImageUtils.saveBitmap(croppedBitmap);
     }
 
-    handler.post(
-        new Runnable() {
-          @Override
-          public void run() {
-            final List<Classifier.Recognition> results = tensorflow.recognizeImage(croppedBitmap);
-
-            LOGGER.v("%d results", results.size());
-            for (final Classifier.Recognition result : results) {
-              LOGGER.v("Result: " + result.getTitle());
-            }
-            scoreView.setResults(results);
+//    handler.post(
+//        new Runnable() {
+//          @Override
+//          public void run() {
+//            final List<Classifier.Recognition> results = tensorflow.recognizeImage(croppedBitmap);
+//
+//            LOGGER.v("%d results", results.size());
+//            for (final Classifier.Recognition result : results) {
+//              LOGGER.v("Result: " + result.getTitle());
+//            }
+//            scoreView.setResults(results);
             computing = false;
-          }
-        });
+//          }
+//        });
 
     Trace.endSection();
+  }
+
+  private void pHash(Bitmap src, Bitmap dst) {
+    Assert.assertEquals(dst.getWidth(), dst.getHeight());
+    final float minDim = Math.min(src.getWidth(), src.getHeight());
+
+    final Matrix matrix = new Matrix();
+
+    // We only want the center square out of the original rectangle.
+    final float translateX = -Math.max(0, (src.getWidth() - minDim) / 2);
+    final float translateY = -Math.max(0, (src.getHeight() - minDim) / 2);
+    matrix.preTranslate(translateX, translateY);
+
+    final float scaleFactor = dst.getHeight() / minDim;
+    matrix.postScale(scaleFactor, scaleFactor);
+
+    // Rotate around the center if necessary.
+    if (sensorOrientation != 0) {
+      matrix.postTranslate(-dst.getWidth() / 2.0f, -dst.getHeight() / 2.0f);
+      matrix.postRotate(sensorOrientation);
+      matrix.postTranslate(dst.getWidth() / 2.0f, dst.getHeight() / 2.0f);
+    }
+
+    final Canvas canvas = new Canvas(dst);
+    canvas.drawBitmap(src, matrix, null);
   }
 }

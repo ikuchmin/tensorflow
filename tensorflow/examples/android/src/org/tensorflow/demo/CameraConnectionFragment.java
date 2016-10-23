@@ -489,7 +489,7 @@ public class CameraConnectionFragment extends Fragment {
       // Create the reader for the preview frames.
       previewReader =
           ImageReader.newInstance(
-              previewSize.getWidth(), previewSize.getHeight(), ImageFormat.YUV_420_888, 2);
+              previewSize.getWidth(), previewSize.getHeight(), ImageFormat.YUV_420_888, 1);
 
       previewReader.setOnImageAvailableListener(tfPreviewListener, backgroundHandler);
       previewRequestBuilder.addTarget(previewReader.getSurface());

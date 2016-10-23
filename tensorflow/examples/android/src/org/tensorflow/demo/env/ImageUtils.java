@@ -20,6 +20,9 @@ import android.os.Environment;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.util.Date;
+
+import static java.lang.String.format;
 
 /**
  * Utility class for manipulating images.
@@ -58,7 +61,7 @@ public class ImageUtils {
       LOGGER.i("Make dir failed");
     }
 
-    final String fname = "preview.png";
+    final String fname = format("preview-%d.png", new Date().getTime());
     final File file = new File(myDir, fname);
     if (file.exists()) {
       file.delete();

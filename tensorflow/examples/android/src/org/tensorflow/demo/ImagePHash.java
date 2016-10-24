@@ -20,9 +20,6 @@ public class ImagePHash {
     private double[][] transpose;
 
     public ImagePHash() {
-        transpose = transposeMatrix(ph);
-        ph = ph_dct_matrix(size);
-
         initMatrix();
         initCoefficients();
     }

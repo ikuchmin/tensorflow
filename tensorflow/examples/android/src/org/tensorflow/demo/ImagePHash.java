@@ -36,8 +36,8 @@ public class ImagePHash {
     }
 
     private void initMatrix() {
-        transpose = transposeMatrix(ph);
         ph = ph_dct_matrix(size);
+        transpose = transposeMatrix(ph);
     }
 
     public int distance(String s1, String s2) {

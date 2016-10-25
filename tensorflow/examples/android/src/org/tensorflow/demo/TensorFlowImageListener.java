@@ -229,8 +229,7 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
       return;
     }
     PrevPHash = currentPHash;
-    //LOGGER.i("Distance more than 20. From background it %d. From prev image it %d.", distance_background, distance_prev);
-      LOGGER.i("Distance more than 20. From prev image it %d.", distance_prev);
+    LOGGER.i("Distance more than 20. From background it %d. From prev image it %d.", distance_background, distance_prev);
 
     drawResizedBitmap(rgbFrameBitmap, croppedBitmap);
 

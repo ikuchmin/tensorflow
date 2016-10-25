@@ -30,6 +30,12 @@ import android.media.ImageReader.OnImageAvailableListener;
 import android.os.Handler;
 import android.os.Trace;
 
+import android.view.View;
+import android.content.Context;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
+import android.media.MediaRecorder;
+
 import java.io.IOException;
 import java.util.List;
 
@@ -221,6 +227,11 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
     }
     PrevPHash = currentPHash;
     LOGGER.i("Distance more than 20. From background it %d. From prev image it %d.", distance_background, distance_prev);
+
+    //view.playSoundEffect(android.view.SoundEffectConstants.CLICK); //v1
+    //AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE); //v2
+    //final float Volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+    //audioManager.playSoundEffect(SoundEffectConstants.CLICK,Volume );
 
     drawResizedBitmap(rgbFrameBitmap, croppedBitmap);
 

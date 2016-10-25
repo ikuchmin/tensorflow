@@ -86,7 +86,8 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
 
   private ImagePHash imagePHash;
 
-  private String previousPHash;
+  private String backgroundPHash;
+  private String PrevPHash = "1010101010101110101010101010011010110010100101111";
 
   public void initialize(
       final AssetManager assetManager,
@@ -105,7 +106,9 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
     this.handler = handler;
     this.sensorOrientation = sensorOrientation;
     this.imagePHash = new ImagePHash();
-    this.previousPHash = "0010101110101000101011110011010111101011111010001";
+    //this.backgroundPHash = "0010101110101000101011110011010111101011111010001"; //ikuchmin
+    this.backgroundPHash = "1010101010101110101010101010011010110010100101111"; //mkaskov v2
+
   }
 
   private void drawResizedBitmap(final Bitmap src, final Bitmap dst) {
@@ -205,12 +208,20 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
     rgbFrameBitmap.setPixels(rgbBytes, 0, previewWidth, 0, 0, previewWidth, previewHeight);
 
     String currentPHash = imagePHash.culcPHash(rgbFrameBitmap);
-    int distance = imagePHash.distance(previousPHash, currentPHash);
-    if (distance < 20) {
+    int distance_prev = imagePHash.distance(PrevPHash, currentPHash);
+    int distance_background = imagePHash.distance(backgroundPHash, currentPHash);
+
+    if (distance_prev < 17) {
       computing = false;
       return;
     }
-    LOGGER.i("Distance more than 15 it is " + distance);
+    else if (distance_background < 17) {
+      computing = false;
+      return;
+    }
+    PrevPHash = currentPHash;
+    //LOGGER.i("Distance more than 20. From background it %d. From prev image it %d.", distance_background, distance_prev);
+      LOGGER.i("Distance more than 20. From prev image it %d.", distance_prev);
 
     drawResizedBitmap(rgbFrameBitmap, croppedBitmap);
 

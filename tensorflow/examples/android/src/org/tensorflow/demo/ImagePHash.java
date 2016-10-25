@@ -53,6 +53,7 @@ public class ImagePHash {
                 return -1;
             }
         }
+        Log.d(TAG, "----------------------------------------");
         return -1;
     }
 

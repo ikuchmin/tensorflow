@@ -32,6 +32,12 @@ import android.os.Trace;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
+import android.view.View;
+import android.content.Context;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
+import android.media.MediaRecorder;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;

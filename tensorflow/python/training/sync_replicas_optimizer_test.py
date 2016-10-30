@@ -68,8 +68,8 @@ def get_workers(num_workers, replicas_to_aggregate, workers):
         # This is to test against sparse gradients.
         grads_sparse = tf.IndexedSlices(
             tf.constant([0.1+worker_id*0.2], shape=[1, 1]),
-            tf.constant([1], dtype=tf.int64),
-            tf.constant([2, 1], dtype=tf.int64))
+            tf.constant([1]),
+            tf.constant([2, 1]))
         sgd_opt = tf.train.GradientDescentOptimizer(2.0)
         sync_rep_opt = tf.train.SyncReplicasOptimizerV2(
             sgd_opt, replicas_to_aggregate=replicas_to_aggregate,
@@ -237,6 +237,9 @@ class SyncReplicasOptimizerV2Test(tf.test.TestCase):
     # The global step should have been updated since we only need to collect 2
     # gradients. The variables should now have the new values after the average
     # of the gradients from worker 0/2 are applied.
+    while global_step.eval(session=sessions[1]) != 1:
+      time.sleep(0.01)
+
     self.assertAllEqual(1, global_step.eval(session=sessions[1]))
     self.assertAllClose(0-(0.1+0.5)/2*2.0, var_0_g_1.eval(session=sessions[1]))
     self.assertAllClose(1-(0.9+1.3)/2*2.0, var_1_g_1.eval(session=sessions[1]))

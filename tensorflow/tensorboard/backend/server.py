@@ -68,8 +68,8 @@ def ParseEventFilesSpec(logdir):
   if logdir is None:
     return files
   for specification in logdir.split(','):
-    # If it's a gcs path, don't split on colon
-    if gcs.IsGCSPath(specification):
+    # If it's a gcs or hdfs path, don't split on colon
+    if gcs.IsGCSPath(specification) or specification.startswith('hdfs://'):
       run_name = None
       path = specification
     # If the spec looks like /foo:bar/baz, then we assume it's a path with a
@@ -80,7 +80,7 @@ def ParseEventFilesSpec(logdir):
     else:
       run_name = None
       path = specification
-    if not gcs.IsGCSPath(path):
+    if not (gcs.IsGCSPath(path) or path.startswith('hdfs://')):
       path = os.path.realpath(path)
     files[path] = run_name
   return files

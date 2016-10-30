@@ -74,6 +74,7 @@ from __future__ import print_function
 import abc
 import collections
 import math
+import six
 
 from tensorflow.contrib.framework.python.framework import deprecation
 from tensorflow.contrib.layers.python.layers import layers
@@ -957,13 +958,18 @@ def shared_embedding_columns(sparse_id_columns,
   Raises:
     ValueError: if sparse_id_columns is empty, or its elements are not
       compatible with each other.
-    TypeError: if at least one element of sparse_id_columns is not a
-      `SparseTensor`.
+    TypeError: if `sparse_id_columns` is not a sequence or is a string. If at
+      least one element of `sparse_id_columns` is not a `SparseTensor`.
   """
   if combiner is None:
     logging.warn("The default value of combiner will change from \"mean\" "
                  "to \"sqrtn\" after 2016/11/01.")
     combiner = "mean"
+  if (not isinstance(sparse_id_columns, collections.Sequence) or
+      isinstance(sparse_id_columns, six.string_types)):
+    raise TypeError(
+        "sparse_id_columns must be a non-string sequence (ex: list or tuple) "
+        "instead of type {}.".format(type(sparse_id_columns)))
   if len(sparse_id_columns) < 1:
     raise ValueError("The input sparse_id_columns should have at least one "
                      "element.")
@@ -972,8 +978,6 @@ def shared_embedding_columns(sparse_id_columns,
       raise TypeError("Elements of sparse_id_columns must be _SparseColumn, but"
                       "{} is not.".format(sparse_id_column))
 
-  if not isinstance(sparse_id_columns, list):
-    sparse_id_columns = list(sparse_id_columns)
   if len(sparse_id_columns) == 1:
     return [
         _EmbeddingColumn(sparse_id_columns[0], dimension, combiner, initializer,
@@ -988,14 +992,17 @@ def shared_embedding_columns(sparse_id_columns,
       raise ValueError("The input sparse id columns are not compatible.")
     # Construct the shared name and size for shared embedding space.
     if not shared_embedding_name:
-      if len(sparse_id_columns) <= 3:
+      # Sort the columns so that shared_embedding_name will be deterministic
+      # even if users pass in unsorted columns from a dict or something.
+      sorted_columns = sorted(sparse_id_columns)
+      if len(sorted_columns) <= 3:
         shared_embedding_name = "_".join([column.name
-                                          for column in sparse_id_columns])
+                                          for column in sorted_columns])
       else:
         shared_embedding_name = "_".join([column.name
-                                          for column in sparse_id_columns[0:3]])
+                                          for column in sorted_columns[0:3]])
         shared_embedding_name += (
-            "_plus_{}_others".format(len(sparse_id_columns)-3))
+            "_plus_{}_others".format(len(sorted_columns)-3))
       shared_embedding_name += "_shared_embedding"
     shared_vocab_size = sparse_id_columns[0].length
 
@@ -1241,7 +1248,8 @@ def real_valued_column(column_name,
       value will be applied as the default value for every dimension. If a
       list of values is provided, the length of the list should be equal to the
       value of `dimension`.
-    dtype: defines the type of values. Default value is tf.float32.
+    dtype: defines the type of values. Default value is tf.float32. Must be a
+      non-quantized, real integer or floating point type.
     normalizer: If not None, a function that can be used to normalize the value
       of the real valued column after default_value is applied for parsing.
       Normalizer function takes the input tensor as its argument, and returns
@@ -1476,6 +1484,7 @@ def bucketized_column(source_column, boundaries):
 class _CrossedColumn(_FeatureColumn,
                      collections.namedtuple("_CrossedColumn",
                                             ["columns", "hash_bucket_size",
+                                             "hash_key",
                                              "combiner", "ckpt_to_load_from",
                                              "tensor_name_in_ckpt"])):
   """Represents a cross transformation also known as conjuction or combination.
@@ -1536,6 +1545,7 @@ class _CrossedColumn(_FeatureColumn,
   def __new__(cls,
               columns,
               hash_bucket_size,
+              hash_key,
               combiner="sqrtn",
               ckpt_to_load_from=None,
               tensor_name_in_ckpt=None):
@@ -1560,7 +1570,8 @@ class _CrossedColumn(_FeatureColumn,
     sorted_columns = sorted(
         [column for column in columns], key=lambda column: column.name)
     return super(_CrossedColumn, cls).__new__(cls, tuple(sorted_columns),
-                                              hash_bucket_size, combiner,
+                                              hash_bucket_size, hash_key,
+                                              combiner,
                                               ckpt_to_load_from,
                                               tensor_name_in_ckpt)
 
@@ -1623,6 +1634,7 @@ class _CrossedColumn(_FeatureColumn,
         feature_tensors,
         hashed_output=True,
         num_buckets=self.hash_bucket_size,
+        hash_key=self.hash_key,
         name="cross")
 
   # pylint: disable=unused-argument
@@ -1650,7 +1662,8 @@ class _CrossedColumn(_FeatureColumn,
 
 def crossed_column(columns, hash_bucket_size, combiner=None,
                    ckpt_to_load_from=None,
-                   tensor_name_in_ckpt=None):
+                   tensor_name_in_ckpt=None,
+                   hash_key=None):
   """Creates a _CrossedColumn.
 
   Args:
@@ -1664,6 +1677,9 @@ def crossed_column(columns, hash_bucket_size, combiner=None,
     tensor_name_in_ckpt: (Optional). Name of the `Tensor` in the provided
       checkpoint from which to restore the column weights. Required if
       `ckpt_to_load_from` is not None.
+    hash_key: Specify the hash_key that will be used by the `FingerprintCat64`
+      function to combine the crosses fingerprints on SparseFeatureCrossOp
+      (optional).
 
   Returns:
     A _CrossedColumn.
@@ -1682,6 +1698,7 @@ def crossed_column(columns, hash_bucket_size, combiner=None,
   return _CrossedColumn(
       columns,
       hash_bucket_size,
+      hash_key,
       combiner=combiner,
       ckpt_to_load_from=ckpt_to_load_from,
       tensor_name_in_ckpt=tensor_name_in_ckpt)
@@ -1797,10 +1814,15 @@ def create_feature_spec_for_parsing(feature_columns):
 
   Args:
     feature_columns: An iterable containing all the feature columns. All items
-      should be instances of classes derived from _FeatureColumn.
+      should be instances of classes derived from _FeatureColumn, unless
+      feature_columns is a dict -- in which case, this should be true of all
+      values in the dict.
   Returns:
     A dict mapping feature keys to FixedLenFeature or VarLenFeature values.
   """
+  if isinstance(feature_columns, dict):
+    feature_columns = feature_columns.values()
+
   features_config = {}
   for column in feature_columns:
     features_config.update(_get_feature_config(column))

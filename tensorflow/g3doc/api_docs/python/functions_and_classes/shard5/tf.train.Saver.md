@@ -158,7 +158,7 @@ checkpoints per device.
 
 - - -
 
-#### `tf.train.Saver.save(sess, save_path, global_step=None, latest_filename=None, meta_graph_suffix='meta', write_meta_graph=True)` {#Saver.save}
+#### `tf.train.Saver.save(sess, save_path, global_step=None, latest_filename=None, meta_graph_suffix='meta', write_meta_graph=True, write_state=True)` {#Saver.save}
 
 Saves variables.
 
@@ -186,6 +186,8 @@ path can be passed directly to a call to `restore()`.
 *  <b>`meta_graph_suffix`</b>: Suffix for `MetaGraphDef` file. Defaults to 'meta'.
 *  <b>`write_meta_graph`</b>: `Boolean` indicating whether or not to write the meta
     graph file.
+*  <b>`write_state`</b>: `Boolean` indicating whether or not to write the
+    `CheckpointStateProto`.
 
 ##### Returns:
 
@@ -226,7 +228,8 @@ The `save_path` argument is typically a value previously returned from a
 ##### Raises:
 
 
-*  <b>`ValueError`</b>: If the given `save_path` does not point to a file.
+*  <b>`ValueError`</b>: DEPRECATED, do not rely on this Error.  If the given
+    `save_path` does not point to a file.
 
 
 
@@ -302,7 +305,7 @@ Builds saver_def.
 
 - - -
 
-#### `tf.train.Saver.export_meta_graph(filename=None, collection_list=None, as_text=False)` {#Saver.export_meta_graph}
+#### `tf.train.Saver.export_meta_graph(filename=None, collection_list=None, as_text=False, export_scope=None)` {#Saver.export_meta_graph}
 
 Writes `MetaGraphDef` to save_path/filename.
 
@@ -312,6 +315,7 @@ Writes `MetaGraphDef` to save_path/filename.
 *  <b>`filename`</b>: Optional meta_graph filename including the path.
 *  <b>`collection_list`</b>: List of string keys to collect.
 *  <b>`as_text`</b>: If `True`, writes the meta_graph as an ASCII proto.
+*  <b>`export_scope`</b>: Optional `string`. Name scope to remove.
 
 ##### Returns:
 
@@ -320,9 +324,19 @@ Writes `MetaGraphDef` to save_path/filename.
 
 - - -
 
-#### `tf.train.Saver.from_proto(saver_def)` {#Saver.from_proto}
+#### `tf.train.Saver.from_proto(saver_def, import_scope=None)` {#Saver.from_proto}
 
 Returns a `Saver` object created from `saver_def`.
+
+##### Args:
+
+
+*  <b>`saver_def`</b>: a `SaveDef` protocol buffer.
+*  <b>`import_scope`</b>: Optional `string`. Name scope to use.
+
+##### Returns:
+
+  A `Saver` built from saver_def.
 
 
 - - -
@@ -346,9 +360,14 @@ Sets the list of old checkpoint filenames.
 
 - - -
 
-#### `tf.train.Saver.to_proto()` {#Saver.to_proto}
+#### `tf.train.Saver.to_proto(export_scope=None)` {#Saver.to_proto}
 
 Converts this `Saver` to a `SaverDef` protocol buffer.
+
+##### Args:
+
+
+*  <b>`export_scope`</b>: Optional `string`. Name scope to remove.
 
 ##### Returns:
 

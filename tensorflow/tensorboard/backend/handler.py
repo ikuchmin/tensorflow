@@ -177,7 +177,7 @@ class TensorboardHandler(BaseHTTPServer.BaseHTTPRequestHandler):
   def _serve_logdir(self, unused_query_params):
     """Writes out the logdir argument with which this tensorboard was started.
     """
-    self.respond(self._logdir, 'text/plain')
+    self.respond({'logdir': self._logdir}, 'application/json')
 
   def _serve_scalars(self, query_params):
     """Given a tag and single run, return array of ScalarEvents.
@@ -506,7 +506,8 @@ class TensorboardHandler(BaseHTTPServer.BaseHTTPRequestHandler):
       plugin = REGISTERED_PLUGINS[name]()
       # Initialize the plugin by passing the main http handler.
       plugin.initialize(self)
-      plugin_handlers = plugin.get_plugin_handlers(self._multiplexer.RunPaths())
+      plugin_handlers = plugin.get_plugin_handlers(self._multiplexer.RunPaths(),
+                                                   self._logdir)
       for route, handler in six.iteritems(plugin_handlers):
         path = DATA_PREFIX + PLUGIN_PREFIX + '/' + name + route
         data_handlers[path] = handler

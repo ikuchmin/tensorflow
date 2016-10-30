@@ -644,7 +644,7 @@ class CreateInputLayersForDNNsTest(tf.test.TestCase):
     hashed_sparse = tf.contrib.layers.sparse_column_with_hash_bucket("wire", 10)
     wire_tensor = tf.SparseTensor(values=["omar", "stringer", "marlo"],
                                   indices=[[0, 0], [1, 0], [1, 1]],
-                                  shape=[2, 2])
+                                  shape=[3, 2])
     features = {"wire": wire_tensor}
     embeded_sparse = tf.contrib.layers.embedding_column(
         hashed_sparse, 1, combiner="sum", initializer=init_ops.ones_initializer)
@@ -653,18 +653,18 @@ class CreateInputLayersForDNNsTest(tf.test.TestCase):
     with self.test_session():
       tf.initialize_all_variables().run()
       # score: (number of values)
-      self.assertAllEqual(output.eval(), [[1.], [2.]])
+      self.assertAllEqual(output.eval(), [[1.], [2.], [0.]])
 
   def testEmbeddingColumnWithWeightedSparseColumnForDNN(self):
     ids = tf.contrib.layers.sparse_column_with_keys(
         "ids", ["marlo", "omar", "stringer"])
     ids_tensor = tf.SparseTensor(values=["stringer", "stringer", "marlo"],
                                  indices=[[0, 0], [1, 0], [1, 1]],
-                                 shape=[2, 2])
+                                 shape=[3, 2])
     weighted_ids = tf.contrib.layers.weighted_sparse_column(ids, "weights")
     weights_tensor = tf.SparseTensor(values=[10.0, 20.0, 30.0],
                                      indices=[[0, 0], [1, 0], [1, 1]],
-                                     shape=[2, 2])
+                                     shape=[3, 2])
     features = {"ids": ids_tensor,
                 "weights": weights_tensor}
     embeded_sparse = tf.contrib.layers.embedding_column(
@@ -675,7 +675,7 @@ class CreateInputLayersForDNNsTest(tf.test.TestCase):
       tf.initialize_all_variables().run()
       tf.initialize_all_tables().run()
       # score: (sum of weights)
-      self.assertAllEqual(output.eval(), [[10.], [50.]])
+      self.assertAllEqual(output.eval(), [[10.], [50.], [0.]])
 
   def testInputLayerWithCollectionsForDNN(self):
     real_valued = tf.contrib.layers.real_valued_column("price")
@@ -960,7 +960,7 @@ class SequenceInputFromFeatureColumnTest(tf.test.TestCase):
 
     # `ids_tensor` consists of 7 instances of <empty>, 3 occurences of "b",
     # 2 occurences of "c" and 1 instance of "a".
-    expected_gradient_values = sorted([7., 3., 2., 1.] * embedding_dimension)
+    expected_gradient_values = sorted([0., 3., 2., 1.] * embedding_dimension)
     actual_gradient_values = np.sort(gradients[0].values, axis=None)
     self.assertAllClose(expected_gradient_values, actual_gradient_values)
 
@@ -1868,6 +1868,79 @@ class ParseExampleTest(tf.test.TestCase):
       self.assertAllEqual(output[bucket].eval(), [[2, 3, 0]])
       self.assertAllEqual(output[wire_cast].indices.eval(), [[0, 0], [0, 1]])
       self.assertAllEqual(output[wire_cast].values.eval(), [2, 0])
+
+  def testParseSequenceExample(self):
+    location_keys = ["east_side", "west_side", "nyc"]
+    embedding_dimension = 10
+
+
+    location = tf.contrib.layers.sparse_column_with_keys(
+        "location", keys=location_keys)
+    location_onehot = tf.contrib.layers.one_hot_column(location)
+    wire_cast = tf.contrib.layers.sparse_column_with_keys(
+        "wire_cast", ["marlo", "omar", "stringer"])
+    wire_cast_embedded = tf.contrib.layers.embedding_column(
+        wire_cast, dimension=embedding_dimension)
+    measurements = tf.contrib.layers.real_valued_column("measurements", dimension=2)
+
+    context_feature_columns = [location_onehot]
+    sequence_feature_columns = [wire_cast_embedded, measurements]
+
+    sequence_example = tf.train.SequenceExample(
+        context=tf.train.Features(feature={
+            "location": tf.train.Feature(
+                bytes_list=tf.train.BytesList(
+                    value=[b"west_side"])),
+        }),
+        feature_lists=tf.train.FeatureLists(feature_list={
+            "wire_cast": tf.train.FeatureList(feature=[
+                tf.train.Feature(bytes_list=tf.train.BytesList(
+                    value=[b"marlo", b"stringer"])),
+                tf.train.Feature(bytes_list=tf.train.BytesList(
+                    value=[b"omar", b"stringer", b"marlo"])),
+                tf.train.Feature(bytes_list=tf.train.BytesList(
+                    value=[b"marlo"])),
+
+            ]),
+            "measurements": tf.train.FeatureList(feature=[
+                tf.train.Feature(float_list=tf.train.FloatList(
+                    value=[0.2, 0.3])),
+                tf.train.Feature(float_list=tf.train.FloatList(
+                    value=[0.1, 0.8])),
+                tf.train.Feature(float_list=tf.train.FloatList(
+                    value=[0.5, 0.0])),
+            ])
+        }))
+
+
+    ctx, seq = tf.contrib.layers.parse_feature_columns_from_sequence_examples(
+         serialized=sequence_example.SerializeToString(),
+         context_feature_columns=context_feature_columns,
+         sequence_feature_columns=sequence_feature_columns)
+
+    self.assertIn("location", ctx)
+    self.assertIsInstance(ctx["location"], tf.SparseTensor)
+    self.assertIn("wire_cast", seq)
+    self.assertIsInstance(seq["wire_cast"], tf.SparseTensor)
+    self.assertIn("measurements", seq)
+    self.assertIsInstance(seq["measurements"], tf.Tensor)
+
+    with self.test_session() as sess:
+      location_val, wire_cast_val, measurement_val = sess.run([
+          ctx["location"], seq["wire_cast"], seq["measurements"]])
+
+    self.assertAllEqual(location_val.indices, np.array([[0]]))
+    self.assertAllEqual(location_val.values, np.array([b"west_side"]))
+    self.assertAllEqual(location_val.shape, np.array([1]))
+
+    self.assertAllEqual(wire_cast_val.indices, np.array(
+        [[0, 0], [0, 1], [1, 0], [1, 1], [1, 2], [2, 0]]))
+    self.assertAllEqual(wire_cast_val.values, np.array(
+        [b"marlo", b"stringer", b"omar", b"stringer", b"marlo", b"marlo"]))
+    self.assertAllEqual(wire_cast_val.shape, np.array([3, 3]))
+
+    self.assertAllClose(
+        measurement_val, np.array([[0.2, 0.3], [0.1, 0.8], [0.5, 0.0]]))
 
 
 class InferRealValuedColumnTest(tf.test.TestCase):

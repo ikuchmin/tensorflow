@@ -151,7 +151,6 @@ cc_library(
 cc_library(
     name = "lib",
     hdrs = [
-        # TODO(josh11b): Make many of these internal.
         "lib/core/arena.h",
         "lib/core/bitmap.h",
         "lib/core/bits.h",
@@ -167,11 +166,13 @@ cc_library(
         "lib/gtl/cleanup.h",
         "lib/gtl/inlined_vector.h",
         "lib/gtl/priority_queue_util.h",
-        "lib/hash/crc32c.h",  # TODO(josh11b): make internal
+        "lib/hash/crc32c.h",
         "lib/histogram/histogram.h",
-        "lib/io/inputbuffer.h",  # TODO(josh11b): make internal
+        "lib/io/buffered_inputstream.h",
+        "lib/io/inputstream_interface.h",
         "lib/io/path.h",
         "lib/io/proto_encode_helper.h",
+        "lib/io/random_inputstream.h",
         "lib/io/record_reader.h",
         "lib/io/record_writer.h",
         "lib/io/table.h",
@@ -182,13 +183,15 @@ cc_library(
         "lib/monitoring/collected_metrics.h",
         "lib/monitoring/collection_registry.h",
         "lib/monitoring/counter.h",
-        "lib/monitoring/mobile_counter.h",
         "lib/monitoring/metric_def.h",
+        "lib/monitoring/mobile_counter.h",
+        "lib/monitoring/mobile_sampler.h",
+        "lib/monitoring/sampler.h",
         "lib/random/distribution_sampler.h",
         "lib/random/philox_random.h",
-        "lib/random/simple_philox.h",  # TODO(josh11b): make internal
-        "lib/strings/numbers.h",  # TODO(josh11b): make internal
-        "lib/strings/str_util.h",  # TODO(josh11b): make internal
+        "lib/random/simple_philox.h",
+        "lib/strings/numbers.h",
+        "lib/strings/str_util.h",
         "lib/strings/strcat.h",
         "lib/strings/stringprintf.h",
         "platform/cpu_info.h",
@@ -200,12 +203,12 @@ cc_library(
         "platform/logging.h",
         "platform/macros.h",
         "platform/mem.h",
-        "platform/net.h",
         "platform/mutex.h",
+        "platform/net.h",
         "platform/notification.h",
         "platform/prefetch.h",
         "platform/profile_utils/cpu_utils.h",
-        "platform/protobuf.h",  # TODO(josh11b): make internal
+        "platform/protobuf.h",
         "platform/stacktrace.h",
         "platform/strong_hash.h",
         "platform/thread_annotations.h",
@@ -540,6 +543,7 @@ cc_library(
         "//tensorflow/core/kernels:fact_op",
         "//tensorflow/core/kernels:array_not_windows",
         "//tensorflow/core/kernels:math_not_windows",
+        "//tensorflow/core/kernels:quantized_ops",
     ]),
 )
 
@@ -712,6 +716,7 @@ cc_library(
     name = "android_tensorflow_lib_lite",
     srcs = if_android(["//tensorflow/core:android_srcs"]),
     copts = tf_copts() + ["-Os"],
+    linkopts = ["-lz"],
     tags = [
         "manual",
         "notap",
@@ -741,6 +746,7 @@ cc_library(
     deps = [
         ":protos_cc",
         "//third_party/eigen3",
+        "@gemmlowp//:gemmlowp",
     ],
     alwayslink = 1,
 )
@@ -769,7 +775,6 @@ cc_library(
     name = "android_tensorflow_lib",
     srcs = if_android([":android_op_registrations_and_gradients"]),
     copts = tf_copts(),
-    linkopts = ["-lz"],
     tags = [
         "manual",
         "notap",
@@ -1007,10 +1012,8 @@ cc_library(
         "lib/gtl/stl_util.h",
         "lib/gtl/top_n.h",
         "lib/hash/hash.h",
-        "lib/io/buffered_inputstream.h",
-        "lib/io/inputstream_interface.h",
+        "lib/io/inputbuffer.h",
         "lib/io/iterator.h",
-        "lib/io/random_inputstream.h",
         "lib/io/snappy/snappy_inputbuffer.h",
         "lib/io/snappy/snappy_outputbuffer.h",
         "lib/io/zlib_compression_options.h",
@@ -1030,6 +1033,7 @@ cc_library(
         "platform/denormal.h",
         "platform/host_info.h",
         "platform/platform.h",
+        "platform/protobuf_internal.h",
         "platform/tensor_coding.h",
         "platform/tracing.h",
     ],
@@ -1093,12 +1097,12 @@ tf_cuda_library(
         ],
     ) + select({
         "//tensorflow:windows": [],
-        "//conditions:default": glob([
+        "//conditions:default": [
             "util/memmapped_file_system.h",
             "util/memmapped_file_system.cc",
             "util/memmapped_file_system_writer.h",
             "util/memmapped_file_system_writer.cc",
-        ]),
+        ],
     }),
     hdrs = [
         "framework/op_segment.h",
@@ -1107,6 +1111,7 @@ tf_cuda_library(
         "framework/tracking_allocator.h",  # only needed for tests
         "framework/unique_tensor_references.h",
         "util/command_line_flags.h",
+        "util/env_var.h",
         "util/presized_cuckoo_map.h",
         "util/tensor_slice_set.h",
         "util/tensor_slice_util.h",
@@ -1514,6 +1519,7 @@ tf_cc_tests(
         "lib/monitoring/collection_registry_test.cc",
         "lib/monitoring/counter_test.cc",
         "lib/monitoring/metric_def_test.cc",
+        "lib/monitoring/sampler_test.cc",
         "lib/random/distribution_sampler_test.cc",
         "lib/random/philox_random_test.cc",
         "lib/random/random_distributions_test.cc",

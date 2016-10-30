@@ -19,6 +19,7 @@ from __future__ import division
 from __future__ import print_function
 
 from tensorflow.contrib.framework.python.framework import checkpoint_utils
+from tensorflow.contrib.framework.python.framework import experimental
 from tensorflow.contrib.framework.python.ops import variables as contrib_variables
 from tensorflow.contrib.layers.python.layers import embedding_ops
 from tensorflow.contrib.layers.python.layers import feature_column as fc
@@ -127,7 +128,6 @@ def _embeddings_from_arguments(column,
       embeddings,
       input_tensor,
       sparse_weights=weight_tensor,
-      default_id=0,
       combiner=args.combiner,
       name=column.name + 'weights')
 
@@ -213,10 +213,8 @@ def input_from_feature_columns(columns_to_tensors,
     age_buckets = bucketized_column(
         source_column=age,
         boundaries=[18, 25, 30, 35, 40, 45, 50, 55, 60, 65])
-    occupation_x_age = crossed_column(columns=[occupation, age_buckets],
-                                      hash_bucket_size=10000)
 
-    feature_columns=[occupation_emb, occupation_x_age]
+    feature_columns=[occupation_emb, age_buckets]
 
   Args:
     columns_to_tensors: A mapping from feature column to tensors. 'string' key
@@ -244,7 +242,7 @@ def input_from_feature_columns(columns_to_tensors,
                                      output_rank=2,
                                      default_name='input_from_feature_columns')
 
-
+@experimental
 def sequence_input_from_feature_columns(columns_to_tensors,
                                         feature_columns,
                                         weight_collections=None,
@@ -327,7 +325,6 @@ def _create_embedding_lookup(column,
         variable,
         embedding_lookup_arguments.input_tensor,
         sparse_weights=embedding_lookup_arguments.weight_tensor,
-        default_id=0,
         combiner=embedding_lookup_arguments.combiner,
         name=column.name + '_weights')
     return variable, predictions
@@ -386,7 +383,6 @@ def _create_joint_embedding_lookup(columns_to_tensors,
         variable,
         sparse_tensor,
         sparse_weights=None,
-        default_id=0,
         combiner='sum',
         name='_weights')
     return variable, predictions
@@ -487,8 +483,6 @@ def weighted_sum_from_feature_columns(columns_to_tensors,
 
     occupation = sparse_column_with_hash_bucket(column_name="occupation",
                                               hash_bucket_size=1000)
-    occupation_emb = embedding_column(sparse_id_column=occupation, dimension=16,
-                                     combiner="sum")
     age = real_valued_column("age")
     age_buckets = bucketized_column(
         source_column=age,
@@ -496,7 +490,7 @@ def weighted_sum_from_feature_columns(columns_to_tensors,
     occupation_x_age = crossed_column(columns=[occupation, age_buckets],
                                       hash_bucket_size=10000)
 
-    feature_columns=[occupation_emb, occupation_x_age]
+    feature_columns=[age_buckets, occupation, occupation_x_age]
 
   Args:
     columns_to_tensors: A mapping from feature column to tensors. 'string' key
@@ -630,6 +624,62 @@ def parse_feature_columns_from_examples(serialized,
   for column in sorted(set(feature_columns), key=lambda x: x.key):
     transformer.transform(column)
   return columns_to_tensors
+
+
+def parse_feature_columns_from_sequence_examples(
+    serialized,
+    context_feature_columns,
+    sequence_feature_columns,
+    name=None,
+    example_name=None):
+  """Parses tf.SequenceExamples to extract tensors for given `FeatureColumn`s.
+
+  Args:
+    serialized: A scalar (0-D Tensor) of type string, a single serialized
+      `SequenceExample` proto.
+    context_feature_columns: An iterable containing the feature columns for
+      context features. All items should be instances of classes derived from
+      `_FeatureColumn`. Can be `None`.
+    sequence_feature_columns: An iterable containing the feature columns for
+      sequence features. All items should be instances of classes derived from
+      `_FeatureColumn`. Can be `None`.
+    name: A name for this operation (optional).
+    example_name: A scalar (0-D Tensor) of type string (optional), the names of
+      the serialized proto.
+
+  Returns:
+    A tuple consisting of:
+    context_features: a dict mapping `FeatureColumns` from
+      `context_feature_columns` to their parsed `Tensors`/`SparseTensor`s.
+    sequence_features: a dict mapping `FeatureColumns` from
+      `sequence_feature_columns` to their parsed `Tensors`/`SparseTensor`s.
+  """
+  # Sequence example parsing requires a single (scalar) example.
+  try:
+    serialized = array_ops.reshape(serialized, [])
+  except ValueError as e:
+    raise ValueError(
+        'serialized must contain as single sequence example. Batching must be '
+        'done after parsing for sequence examples. Error: {}'.format(e))
+
+  if context_feature_columns is None:
+    context_feature_columns = []
+  if sequence_feature_columns is None:
+    sequence_feature_columns = []
+
+  check_feature_columns(context_feature_columns)
+  context_feature_spec = fc.create_feature_spec_for_parsing(
+      context_feature_columns)
+
+  check_feature_columns(sequence_feature_columns)
+  sequence_feature_spec = fc._create_sequence_feature_spec_for_parsing(  # pylint: disable=protected-access
+      sequence_feature_columns, allow_missing_by_default=False)
+
+  return parsing_ops.parse_single_sequence_example(serialized,
+                                                   context_feature_spec,
+                                                   sequence_feature_spec,
+                                                   example_name,
+                                                   name)
 
 
 def _log_variable(variable):

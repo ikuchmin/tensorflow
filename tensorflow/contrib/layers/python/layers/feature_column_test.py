@@ -137,6 +137,35 @@ class FeatureColumnTest(tf.test.TestCase):
     for i in range(len(d1_value)):
       self.assertAllClose(d1_value[i], e1_value[i])
 
+  def testSharedEmbeddingColumnDeterminism(self):
+    # Tests determinism in auto-generated shared_embedding_name.
+    sparse_id_columns = tuple([
+        tf.contrib.layers.sparse_column_with_keys(k, ["foo", "bar"])
+        for k in ["07", "02", "00", "03", "05", "01", "09", "06", "04", "08"]
+    ])
+    output = tf.contrib.layers.shared_embedding_columns(
+        sparse_id_columns, dimension=2, combiner="mean")
+    self.assertEqual(len(output), 10)
+    for x in output:
+      self.assertEqual(x.shared_embedding_name,
+                       "00_01_02_plus_7_others_shared_embedding")
+
+  def testSharedEmbeddingColumnErrors(self):
+    # Tries passing in a string.
+    with self.assertRaises(TypeError):
+      invalid_string = "Invalid string."
+      tf.contrib.layers.shared_embedding_columns(
+          invalid_string, dimension=2, combiner="mean")
+
+    # Tries passing in a set of sparse columns.
+    with self.assertRaises(TypeError):
+      invalid_set = set([
+          tf.contrib.layers.sparse_column_with_keys("a", ["foo", "bar"]),
+          tf.contrib.layers.sparse_column_with_keys("b", ["foo", "bar"]),
+      ])
+      tf.contrib.layers.shared_embedding_columns(
+          invalid_set, dimension=2, combiner="mean")
+
   def testOneHotColumn(self):
     a = tf.contrib.layers.sparse_column_with_keys("a", ["a", "b", "c", "d"])
     onehot_a = tf.contrib.layers.one_hot_column(a)
@@ -431,20 +460,37 @@ class FeatureColumnTest(tf.test.TestCase):
                            real_valued_col1, real_valued_col2,
                            bucketized_col1, bucketized_col2,
                            cross_col])
-    config = tf.contrib.layers.create_feature_spec_for_parsing(feature_columns)
-    self.assertDictEqual({
+    expected_config = {
         "sparse_column": tf.VarLenFeature(tf.string),
-        "sparse_column_for_embedding": tf.VarLenFeature(tf.string),
+        "sparse_column_for_embedding":
+            tf.VarLenFeature(tf.string),
         "id_column": tf.VarLenFeature(tf.string),
         "id_weights_column": tf.VarLenFeature(tf.float32),
-        "real_valued_column1": tf.FixedLenFeature([1], dtype=tf.float32),
-        "real_valued_column2": tf.FixedLenFeature([5], dtype=tf.float32),
+        "real_valued_column1": tf.FixedLenFeature(
+            [1], dtype=tf.float32),
+        "real_valued_column2": tf.FixedLenFeature(
+            [5], dtype=tf.float32),
         "real_valued_column_for_bucketization1":
-            tf.FixedLenFeature([1], dtype=tf.float32),
+            tf.FixedLenFeature(
+                [1], dtype=tf.float32),
         "real_valued_column_for_bucketization2":
-            tf.FixedLenFeature([4], dtype=tf.float32),
+            tf.FixedLenFeature(
+                [4], dtype=tf.float32),
         "cross_aaa": tf.VarLenFeature(tf.string),
-        "cross_bbb": tf.VarLenFeature(tf.string)}, config)
+        "cross_bbb": tf.VarLenFeature(tf.string)
+    }
+
+    config = tf.contrib.layers.create_feature_spec_for_parsing(feature_columns)
+    self.assertDictEqual(expected_config, config)
+
+    # Test that the same config is parsed out if we pass a dictionary.
+    feature_columns_dict = {
+        str(i): val
+        for i, val in enumerate(feature_columns)
+    }
+    config = tf.contrib.layers.create_feature_spec_for_parsing(
+        feature_columns_dict)
+    self.assertDictEqual(expected_config, config)
 
   def testCreateFeatureSpec_RealValuedColumnWithDefaultValue(self):
     real_valued_col1 = tf.contrib.layers.real_valued_column(

@@ -30,12 +30,18 @@ import android.media.ImageReader.OnImageAvailableListener;
 import android.os.Handler;
 import android.os.Trace;
 
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.List;
 
 import junit.framework.Assert;
 import org.tensorflow.demo.env.ImageUtils;
 import org.tensorflow.demo.env.Logger;
+
 
 /**
  * Class that takes in preview frames and converts the image to Bitmaps to process with Tensorflow.
@@ -214,8 +220,14 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
 
     drawResizedBitmap(rgbFrameBitmap, croppedBitmap);
 
-    if (SAVE_PREVIEW_BITMAP) {
-      ImageUtils.saveBitmap(croppedBitmap);
+//    if (SAVE_PREVIEW_BITMAP) {
+//      ImageUtils.saveBitmap(croppedBitmap);
+//    }
+
+    try {
+      uploadImage(croppedBitmap);
+    } catch (IOException e) {
+      LOGGER.e("Image can't be road from camera", e);
     }
 
 //    handler.post(
@@ -259,5 +271,45 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
 
     final Canvas canvas = new Canvas(dst);
     canvas.drawBitmap(src, matrix, null);
+  }
+
+  private String attachmentName = "file";
+  private String attachmentFileName = "png";
+  private String crlf = "\r\n";
+  private String twoHyphens = "--";
+  private String boundary =  "*****";
+  /*
+   * http://stackoverflow.com/questions/34276466/simple-httpurlconnection-post-file-multipart-form-data-from-android-to-google-bl
+   */
+  private void uploadImage(Bitmap image) throws IOException {
+    URL url = new URL("http://192.168.1.218:8080/journal/recognition"); //TODO: Replace on string which is ritrieved from Settings app
+    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    try {
+      conn.setDoOutput(true);
+      conn.setChunkedStreamingMode(0);
+      conn.setRequestMethod("POST");
+
+      conn.setRequestProperty("Content-Type", "multipart/form-data;boundary=" + boundary);
+
+      try (DataOutputStream request = new DataOutputStream(new BufferedOutputStream(conn.getOutputStream()))) {
+        request.writeBytes(twoHyphens + boundary + crlf);
+        request.writeBytes("Content-Disposition: form-data; name=\"" +
+                attachmentName + "\";filename=\"" +
+                attachmentFileName + "\"" + crlf);
+        request.writeBytes(crlf);
+
+        image.compress(Bitmap.CompressFormat.PNG, 99, request);
+
+        request.writeBytes(crlf);
+        request.writeBytes(twoHyphens + boundary +
+                twoHyphens + crlf);
+        request.flush();
+      }
+
+    } catch (Exception e) {
+      e.printStackTrace();
+    } finally {
+      conn.disconnect();
+    }
   }
 }

@@ -36,11 +36,14 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Date;
 import java.util.List;
 
 import junit.framework.Assert;
 import org.tensorflow.demo.env.ImageUtils;
 import org.tensorflow.demo.env.Logger;
+
+import static java.lang.String.format;
 
 
 /**
@@ -295,7 +298,7 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
         request.writeBytes(twoHyphens + boundary + crlf);
         request.writeBytes("Content-Disposition: form-data; name=\"" +
                 attachmentName + "\";filename=\"" +
-                attachmentFileName + "\"" + crlf);
+                format("preview-%d.png", new Date().getTime()) + "\"" + crlf);
         request.writeBytes(crlf);
 
         image.compress(Bitmap.CompressFormat.PNG, 99, request);

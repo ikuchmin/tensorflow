@@ -19,10 +19,7 @@ import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
 import android.graphics.Canvas;
-import android.graphics.ColorMatrix;
-import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Matrix;
-import android.graphics.Paint;
 import android.media.Image;
 import android.media.Image.Plane;
 import android.media.ImageReader;
@@ -32,18 +29,11 @@ import android.os.Trace;
 
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
-import android.view.View;
-import android.content.Context;
-import android.media.AudioManager;
-import android.media.MediaPlayer;
-import android.media.MediaRecorder;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Date;
-import java.util.List;
 
 import junit.framework.Assert;
 import org.tensorflow.demo.env.ImageUtils;
@@ -102,9 +92,9 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
   private ImagePHash imagePHash;
 
   private String backgroundPHash;
-  private String PrevPHash = "1010101010101110101010101010011010110010100101111";
+  private String prevPHash;
 
-  public void initialize(
+    public void initialize(
       final AssetManager assetManager,
       final RecognitionScoreView scoreView,
       final Handler handler,
@@ -121,8 +111,9 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
     this.handler = handler;
     this.sensorOrientation = sensorOrientation;
     this.imagePHash = new ImagePHash();
-    //this.backgroundPHash = "0010101110101000101011110011010111101011111010001"; //ikuchmin
-    this.backgroundPHash = "1010101010101110101010101010011010110010100101111"; //mkaskov v2
+    this.backgroundPHash = "0010101010111001011111010111010111010111110101111"; //ikuchmin
+//    this.backgroundPHash = "0010101010111001011111010111010101011111110101111"; //mkaskov v2
+    this.prevPHash = "0010101010111001011111010111010111010111110101111";
 
   }
 
@@ -223,18 +214,20 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
     rgbFrameBitmap.setPixels(rgbBytes, 0, previewWidth, 0, 0, previewWidth, previewHeight);
 
     String currentPHash = imagePHash.culcPHash(rgbFrameBitmap);
-    int distance_prev = imagePHash.distance(PrevPHash, currentPHash);
+    int distance_prev = imagePHash.distance(prevPHash, currentPHash);
     int distance_background = imagePHash.distance(backgroundPHash, currentPHash);
 
     if (distance_prev < 17) {
       computing = false;
       return;
     }
-    else if (distance_background < 17) {
+    prevPHash = currentPHash;
+
+    if (distance_background < 17) {
       computing = false;
       return;
     }
-    PrevPHash = currentPHash;
+
     LOGGER.i("Distance more than 20. From background it %d. From prev image it %d.", distance_background, distance_prev);
 
     drawResizedBitmap(rgbFrameBitmap, croppedBitmap);
@@ -301,7 +294,7 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
    * http://stackoverflow.com/questions/34276466/simple-httpurlconnection-post-file-multipart-form-data-from-android-to-google-bl
    */
   private void uploadImage(Bitmap image) throws IOException {
-    URL url = new URL("http://192.168.1.218:8080/journal/recognition"); //TODO: Replace on string which is ritrieved from Settings app
+    URL url = new URL("http://192.168.1.215:8080/journal/recognition"); //TODO: Replace on string which is ritrieved from Settings app
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
     try {
       conn.setDoOutput(true);

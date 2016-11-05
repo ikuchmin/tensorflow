@@ -94,7 +94,12 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
   private String backgroundPHash;
   private String prevPHash;
 
-    public void initialize(
+  private boolean init = false; // FIXME: Temporary hack
+  private int skipCounter = 0; // FIXME: Temporary hack
+  private int skipBarrier = 100;
+
+
+  public void initialize(
       final AssetManager assetManager,
       final RecognitionScoreView scoreView,
       final Handler handler,
@@ -111,10 +116,9 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
     this.handler = handler;
     this.sensorOrientation = sensorOrientation;
     this.imagePHash = new ImagePHash();
-    this.backgroundPHash = "0010101010111001011111010111010111010111110101111"; //ikuchmin
+//    this.backgroundPHash = "1010101010101110101010101010101101101010111010011"; //ikuchmin
 //    this.backgroundPHash = "0010101010111001011111010111010101011111110101111"; //mkaskov v2
-    this.prevPHash = "0010101010111001011111010111010111010111110101111";
-
+//    this.prevPHash = "1010101010101110101010101010101101101010111010011";
   }
 
   private void drawResizedBitmap(final Bitmap src, final Bitmap dst) {
@@ -150,6 +154,12 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
       image = reader.acquireLatestImage();
 
       if (image == null) {
+        return;
+      }
+
+      if (!init) {
+        if (skipCounter++ > skipBarrier) init = true;
+        image.close();
         return;
       }
 
@@ -214,16 +224,20 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
     rgbFrameBitmap.setPixels(rgbBytes, 0, previewWidth, 0, 0, previewWidth, previewHeight);
 
     String currentPHash = imagePHash.culcPHash(rgbFrameBitmap);
+
+    if (this.prevPHash == null) this.prevPHash = currentPHash;
     int distance_prev = imagePHash.distance(prevPHash, currentPHash);
+
+    if (this.backgroundPHash == null) this.backgroundPHash = currentPHash;
     int distance_background = imagePHash.distance(backgroundPHash, currentPHash);
 
-    if (distance_prev < 17) {
+    if (distance_prev < 12) {
       computing = false;
       return;
     }
     prevPHash = currentPHash;
 
-    if (distance_background < 17) {
+    if (distance_background < 12) {
       computing = false;
       return;
     }
@@ -294,7 +308,7 @@ public class TensorFlowImageListener implements OnImageAvailableListener {
    * http://stackoverflow.com/questions/34276466/simple-httpurlconnection-post-file-multipart-form-data-from-android-to-google-bl
    */
   private void uploadImage(Bitmap image) throws IOException {
-    URL url = new URL("http://192.168.1.215:8080/journal/recognition"); //TODO: Replace on string which is ritrieved from Settings app
+    URL url = new URL("http://server.puremind.tech:8080/journal/recognition"); //TODO: Replace on string which is ritrieved from Settings app
     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
     try {
       conn.setDoOutput(true);
